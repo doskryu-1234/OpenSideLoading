@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenSideLoading</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        :root {
+            --bg-color: #0b0b0e;
+            --card-bg: #16161a;
+            --accent-color: #2563eb;
+            --text-color: #ffffff;
+            --sub-text: #a1a1aa;
+        }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 400px;
+        }
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        h2 { font-size: 1.2rem; margin-top: 0; }
+        .input-group {
+            margin-bottom: 12px;
+        }
+        label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--sub-text);
+            margin-bottom: 4px;
+        }
+        input[type="file"], input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            background: #22222a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #fff;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background-color: var(--accent-color);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        #result { margin-top: 15px; text-align: center; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="text-align: center; font-size: 1.5rem;">OpenSideLoading</h1>
+        
+        <div class="card">
+            <h2>IPA Signer</h2>
+            <form id="signForm">
+                <div class="input-group">
+                    <label>IPA 파일</label>
+                    <input type="file" id="ipaFile" accept="*/*" required>
+                </div>
+                <div class="input-group">
+                    <label>P12 인증서</label>
+                    <input type="file" id="p12File" accept="*/*" required>
+                </div>
+                <div class="input-group">
+                    <label>Mobileprovision 프로파일</label>
+                    <input type="file" id="provFile" accept="*/*" required>
+                </div>
+                <div class="input-group">
+                    <label>P12 암호</label>
+                    <input type="password" id="p12Password" placeholder="비밀번호가 없으면 비워두세요">
+                </div>
+                <button type="submit">앱 서명 시작</button>
+            </form>
+            <div id="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const GITHUB_PAT = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"; // GitHub Personal Access Token
+        const REPO_OWNER = "YOUR_GITHUB_USERNAME";
+        const REPO_NAME = "YOUR_REPO_NAME";
+
+        document.getElementById('signForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerText = "서명 요청 전송 중...";
+
+            // 파일 base64 변환 로직 및 GitHub repository_dispatch Trigger API 호출 구문 작성 위치
+            resultDiv.innerText = "GitHub Actions로 서명 작업이 요청되었습니다. 소요 시간 약 1~2분.";
+        });
+    </script>
+</body>
+</html>
