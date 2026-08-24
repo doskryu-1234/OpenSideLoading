@@ -28,7 +28,7 @@
         h2 { font-size: 1.2rem; margin-top: 0; }
         .input-group { margin-bottom: 12px; }
         label { display: block; font-size: 0.85rem; color: var(--sub-text); margin-bottom: 4px; }
-        input[type="file"], input[type="password"] {
+        input[type="file"], input[type="password"], input[type="url"] {
             width: 100%; padding: 10px; background: #22222a; border: 1px solid #333; border-radius: 8px; color: #fff; box-sizing: border-box;
         }
         button {
@@ -44,8 +44,8 @@
             <h2>IPA Signer</h2>
             <form id="signForm">
                 <div class="input-group">
-                    <label>IPA 파일</label>
-                    <input type="file" id="ipaFile" accept="*/*" required>
+                    <label>IPA 파일 다운로드 URL</label>
+                    <input type="url" id="ipaUrl" placeholder="https://example.com/app.ipa" required>
                 </div>
                 <div class="input-group">
                     <label>P12 인증서</label>
@@ -66,7 +66,7 @@
     </div>
 
     <script>
-        const GITHUB_PAT = "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";
+        const GITHUB_PAT = "새로_발급받은_토큰_입력";
         const REPO_OWNER = "doskryu-1234";
         const REPO_NAME = "OpenSideLoading";
 
@@ -80,19 +80,18 @@
         document.getElementById('signForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const resultDiv = document.getElementById('result');
-            resultDiv.innerText = "파일 처리 중...";
+            resultDiv.innerText = "인증서 처리 중...";
 
             try {
-                const ipaFile = document.getElementById('ipaFile').files[0];
+                const ipaUrl = document.getElementById('ipaUrl').value;
                 const p12File = document.getElementById('p12File').files[0];
                 const provFile = document.getElementById('provFile').files[0];
                 const p12Password = document.getElementById('p12Password').value;
 
-                const ipaBase64 = await fileToBase64(ipaFile);
                 const p12Base64 = await fileToBase64(p12File);
                 const provBase64 = await fileToBase64(provFile);
 
-                resultDiv.innerText = "서명 요청 전송 중...";
+                resultDiv.innerText = "GitHub Actions로 서명 요청 전송 중...";
 
                 const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/dispatches`, {
                     method: 'POST',
@@ -104,7 +103,7 @@
                     body: JSON.stringify({
                         event_type: 'trigger-sign',
                         client_payload: {
-                            ipa_base64: ipaBase64,
+                            ipa_url: ipaUrl,
                             p12_base64: p12Base64,
                             prov_base64: provBase64,
                             p12_password: p12Password
@@ -113,9 +112,9 @@
                 });
 
                 if (res.ok) {
-                    resultDiv.innerText = "요청 성공! GitHub Actions에서 서명 작업이 진행 중입니다.";
+                    resultDiv.innerText = "요청 성공! 백엔드에서 서명 작업 중입니다. 잠시 후 GitHub 저장소의 Actions 탭에서 결과를 확인하세요.";
                 } else {
-                    resultDiv.innerText = "요청 실패. 토큰 권한이나 저장소 이름을 확인하십시오.";
+                    resultDiv.innerText = "요청 실패. 토큰 유효성이나 저장소 설정을 확인하십시오.";
                 }
             } catch (err) {
                 resultDiv.innerText = "오류 발생: " + err.message;
