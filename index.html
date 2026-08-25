@@ -28,7 +28,7 @@
         h2 { font-size: 1.2rem; margin-top: 0; }
         .input-group { margin-bottom: 12px; }
         label { display: block; font-size: 0.85rem; color: var(--sub-text); margin-bottom: 4px; }
-        input[type="file"], input[type="password"] {
+        input[type="text"], input[type="file"], input[type="password"] {
             width: 100%; padding: 10px; background: #22222a; border: 1px solid #333; border-radius: 8px; color: #fff; box-sizing: border-box;
         }
         button {
@@ -44,15 +44,15 @@
             <h2>IPA Signer</h2>
             <form id="signForm">
                 <div class="input-group">
-                    <label>IPA 파일</label>
-                    <input type="file" id="ipaFile" accept=".ipa" required>
+                    <label>IPA 직접 다운로드 링크 (URL)</label>
+                    <input type="text" id="ipaUrlInput" placeholder="https://..." required>
                 </div>
                 <div class="input-group">
-                    <label>P12 인증서</label>
+                    <label>P12 인증서 파일</label>
                     <input type="file" id="p12File" accept=".p12" required>
                 </div>
                 <div class="input-group">
-                    <label>Mobileprovision 프로파일</label>
+                    <label>Mobileprovision 프로파일 파일</label>
                     <input type="file" id="provFile" accept=".mobileprovision" required>
                 </div>
                 <div class="input-group">
@@ -102,19 +102,18 @@
             const submitBtn = document.getElementById('submitBtn');
             
             submitBtn.disabled = true;
-            resultDiv.innerText = "파일 변환 중...";
+            resultDiv.innerText = "인증서 데이터 변환 중...";
 
             try {
-                const ipaFile = document.getElementById('ipaFile').files[0];
+                const ipaUrl = document.getElementById('ipaUrlInput').value;
                 const p12File = document.getElementById('p12File').files[0];
                 const provFile = document.getElementById('provFile').files[0];
                 const p12Password = document.getElementById('p12Password').value;
 
-                const ipaBase64 = await fileToBase64(ipaFile);
                 const p12Base64 = await fileToBase64(p12File);
                 const provBase64 = await fileToBase64(provFile);
 
-                resultDiv.innerText = "서명 작업 진행 중... (약 1분 소요)";
+                resultDiv.innerText = "서명 작업 요청 중... (약 1~2분 소요)";
 
                 const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/dispatches`, {
                     method: 'POST',
@@ -126,7 +125,7 @@
                     body: JSON.stringify({
                         event_type: 'trigger-sign',
                         client_payload: {
-                            ipa_base64: ipaBase64,
+                            ipa_url: ipaUrl,
                             p12_base64: p12Base64,
                             prov_base64: provBase64,
                             p12_password: p12Password
