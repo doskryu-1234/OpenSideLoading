@@ -35,15 +35,9 @@ jobs:
           echo "Downloading IPA from: $IPA_URL"
           curl -L -o input.ipa "$IPA_URL"
           
-          # 다운로드된 파일의 앞부분 확인 (디버깅용 출력)
-          echo "=== 파일 헤더 내용 출력 ==="
-          head -c 100 input.ipa
-          echo "========================"
-
-          # 파일이 HTML(오류 페이지나 잘못된 링크)인지 검증
+          # 파일이 HTML(오류 페이지)인지 검증
           if grep -q "<html" input.ipa || grep -q "<DOCTYPE" input.ipa; then
             echo "❌ 오류: 다운로드된 파일이 IPA가 아니라 HTML 웹페이지입니다."
-            echo "입력하신 링크($IPA_URL)가 잘못되었거나 파일 직접 다운로드 링크가 아닙니다."
             exit 255
           fi
 
@@ -63,11 +57,11 @@ jobs:
             zsign -k cert.p12 -p "$P12_PASS" -m cert.mobileprovision -o output.ipa input.ipa
           fi
 
-      - name: Create Release and Upload
+      - name: Deploy to GitHub Pages (gh-pages)
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # IPA 파일 안에서 실제 번들 ID 자동 추출
+          # IPA 내부에서 실제 번들 ID 추출
           BUNDLE_ID=$(python3 -c "
           import zipfile, plistlib
           with zipfile.ZipFile('input.ipa', 'r') as z:
@@ -79,9 +73,25 @@ jobs:
           ")
           echo "Extracted Bundle ID: $BUNDLE_ID"
 
-          gh release delete ota --cleanup-tag -y 2>/dev/null || true
-          IPA_DL_URL="https://github.com/${{ github.repository }}/releases/download/ota/output.ipa"
+          # 저장소 이름 및 사용자 이름 추출
+          REPO_NAME="${{ github.event.repository.name }}"
+          OWNER_NAME="${{ github.repository_owner }}"
           
+          IPA_DL_URL="https://$OWNER_NAME.github.io/$REPO_NAME/output.ipa"
+          
+          # manifest.plist 생성
           printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n<key>items</key>\n<array>\n<dict>\n<key>assets</key>\n<array>\n<dict>\n<key>kind</key>\n<string>software-package</string>\n<key>url</key>\n<string>%s</string>\n</dict>\n</array>\n<key>metadata</key>\n<dict>\n<key>bundle-identifier</key>\n<string>%s</string>\n<key>bundle-version</key>\n<string>1.0</string>\n<key>kind</key>\n<string>software</string>\n<key>title</key>\n<string>Signed App</string>\n</dict>\n</dict>\n</array>\n</dict>\n</plist>' "$IPA_DL_URL" "$BUNDLE_ID" > manifest.plist
+
+          # gh-pages 브랜치로 파일 푸시
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          gh release create ota output.ipa manifest.plist --title "OTA Release" --notes "Signed IPA & Manifest"
+          git checkout --orphan gh-pages
+          git rm -rf . || true
+          
+          mv output.ipa output.ipa
+          mv manifest.plist manifest.plist
+          
+          git add output.ipa manifest.plist
+          git commit -m "Deploy OTA build"
+          git push origin gh-pages --force
