@@ -29,12 +29,9 @@ jobs:
           make clean && make
           sudo mv ${{ github.workspace }}/zsign_src/bin/zsign /usr/local/bin/
 
-      - name: Download IPA
+      - name: Decode Files (IPA & Certs)
         run: |
-          wget -O input.ipa "${{ github.event.client_payload.ipa_url }}"
-
-      - name: Decode Certificates
-        run: |
+          echo "${{ github.event.client_payload.ipa_base64 }}" | base64 -d > input.ipa
           echo "${{ github.event.client_payload.p12_base64 }}" | base64 -d > cert.p12
           echo "${{ github.event.client_payload.prov_base64 }}" | base64 -d > cert.mobileprovision
 
