@@ -69,6 +69,7 @@
         const GITHUB_PAT = "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";
         const REPO_OWNER = "doskryu-1234";
         const REPO_NAME = "OpenSideLoading";
+        const PLIST_URL = `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/ota/manifest.plist`;
 
         const fileToBase64 = file => new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -93,22 +94,22 @@
             return rawUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
         };
 
-        // GitHub Actions 완료 대기 후 plist URL 받아오기
-        const waitForOtaUrl = async () => {
+        const waitForWorkflow = async () => {
             for (let i = 0; i < 30; i++) {
-                await new Promise(r => setTimeout(r, 5000)); // 5초 간격 체킹
-                const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits/main/status`, {
+                await new Promise(r => setTimeout(r, 4000));
+                const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/runs?event=repository_dispatch&per_page=1`, {
                     headers: { 'Authorization': `token ${GITHUB_PAT}` }
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    const otaStatus = data.statuses.find(s => s.context === 'ota-dispatch' && s.state === 'success');
-                    if (otaStatus) {
-                        return otaStatus.target_url;
+                    const latestRun = data.workflow_runs[0];
+                    if (latestRun && latestRun.status === 'completed') {
+                        if (latestRun.conclusion === 'success') return true;
+                        throw new Error("서명 실패. Actions 로그를 확인하십시오.");
                     }
                 }
             }
-            throw new Error("서명 시간이 초과되었습니다.");
+            throw new Error("작업 시간이 초과되었습니다.");
         };
 
         document.getElementById('signForm').addEventListener('submit', async (e) => {
@@ -153,13 +154,11 @@
 
                 if (!res.ok) throw new Error("서명 요청 실패");
 
-                // 서명 완료 대기
-                const plistUrl = await waitForOtaUrl();
+                await waitForWorkflow();
                 
-                resultDiv.innerText = "서명 완료! 설치 팝업을 불러옵니다...";
+                resultDiv.innerText = "서명 완료! 설치 팝업을 호출합니다...";
                 
-                // Safari 설치 팝업 호출
-                window.location.href = `itms-services://?action=download-manifest&url=${plistUrl}`;
+                window.location.href = `itms-services://?action=download-manifest&url=${PLIST_URL}`;
 
             } catch (err) {
                 resultDiv.innerText = "오류 발생: " + err.message;
