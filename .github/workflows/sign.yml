@@ -26,7 +26,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake g++ libssl-dev
           cd zsign_src
-          mkdir build && cd build
+          mkdir -p build
+          cd build
           cmake ..
           make
           sudo mv zsign /usr/local/bin/
