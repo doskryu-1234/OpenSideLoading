@@ -59,7 +59,7 @@
                     <label>P12 암호</label>
                     <input type="password" id="p12Password" placeholder="비밀번호가 없으면 비워두세요">
                 </div>
-                <button type="submit" id="submitBtn">앱 서명 시작</button>
+                <button type="submit" id="submitBtn">앱 서명 및 설치 시작</button>
             </form>
             <div id="result"></div>
         </div>
@@ -86,11 +86,29 @@
                 body: formData
             });
 
-            if (!res.ok) throw new Error("IPA 임시 업로드 실패");
+            if (!res.ok) throw new Error("IPA 파일 업로드 실패");
 
             const data = await res.json();
             const rawUrl = data.data.url;
             return rawUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+        };
+
+        // GitHub Actions 완료 대기 후 plist URL 받아오기
+        const waitForOtaUrl = async () => {
+            for (let i = 0; i < 30; i++) {
+                await new Promise(r => setTimeout(r, 5000)); // 5초 간격 체킹
+                const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits/main/status`, {
+                    headers: { 'Authorization': `token ${GITHUB_PAT}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const otaStatus = data.statuses.find(s => s.context === 'ota-dispatch' && s.state === 'success');
+                    if (otaStatus) {
+                        return otaStatus.target_url;
+                    }
+                }
+            }
+            throw new Error("서명 시간이 초과되었습니다.");
         };
 
         document.getElementById('signForm').addEventListener('submit', async (e) => {
@@ -99,7 +117,7 @@
             const submitBtn = document.getElementById('submitBtn');
             
             submitBtn.disabled = true;
-            resultDiv.innerText = "IPA 파일 전송 중... (용량에 따라 수십 초 소요)";
+            resultDiv.innerText = "파일 업로드 중...";
 
             try {
                 const ipaFile = document.getElementById('ipaFile').files[0];
@@ -108,12 +126,12 @@
                 const p12Password = document.getElementById('p12Password').value;
 
                 const ipaUrl = await uploadIpaToTempStorage(ipaFile);
-                resultDiv.innerText = "인증서 파일 변환 중...";
+                resultDiv.innerText = "인증서 변환 중...";
 
                 const p12Base64 = await fileToBase64(p12File);
                 const provBase64 = await fileToBase64(provFile);
 
-                resultDiv.innerText = "GitHub Actions로 서명 요청 전송 중...";
+                resultDiv.innerText = "서명 작업 진행 중... (약 1분 소요)";
 
                 const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/dispatches`, {
                     method: 'POST',
@@ -133,11 +151,16 @@
                     })
                 });
 
-                if (res.ok) {
-                    resultDiv.innerText = "요청 성공! 백엔드에서 서명 중입니다. 약 1~2분 후 GitHub Actions 탭을 확인하십시오.";
-                } else {
-                    resultDiv.innerText = "요청 실패. 토큰 유효성을 확인하십시오.";
-                }
+                if (!res.ok) throw new Error("서명 요청 실패");
+
+                // 서명 완료 대기
+                const plistUrl = await waitForOtaUrl();
+                
+                resultDiv.innerText = "서명 완료! 설치 팝업을 불러옵니다...";
+                
+                // Safari 설치 팝업 호출
+                window.location.href = `itms-services://?action=download-manifest&url=${plistUrl}`;
+
             } catch (err) {
                 resultDiv.innerText = "오류 발생: " + err.message;
             } finally {
