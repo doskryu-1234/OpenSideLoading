@@ -67,7 +67,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # IPA 파일 안에서 실제 번들 ID 자동 추출
+          BUNDLE_ID=$(python3 -c "
+          import zipfile, plistlib
+          with zipfile.ZipFile('input.ipa', 'r') as z:
+              for filename in z.namelist():
+                  if filename.endswith('.app/Info.plist'):
+                      pl = plistlib.loads(z.read(filename))
+                      print(pl.get('CFBundleIdentifier', 'com.opensideloading.app'))
+                      break
+          ")
+          echo "Extracted Bundle ID: $BUNDLE_ID"
+
           gh release delete ota --cleanup-tag -y 2>/dev/null || true
           IPA_DL_URL="https://github.com/${{ github.repository }}/releases/download/ota/output.ipa"
-          printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n<key>items</key>\n<array>\n<dict>\n<key>assets</key>\n<array>\n<dict>\n<key>kind</key>\n<string>software-package</string>\n<key>url</key>\n<string>%s</string>\n</dict>\n</array>\n<key>metadata</key>\n<dict>\n<key>bundle-identifier</key>\n<string>com.opensideloading.app</string>\n<key>bundle-version</key>\n<string>1.0</string>\n<key>kind</key>\n<string>software</string>\n<key>title</key>\n<string>Signed App</string>\n</dict>\n</dict>\n</array>\n</dict>\n</plist>' "$IPA_DL_URL" > manifest.plist
+          
+          printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n<key>items</key>\n<array>\n<dict>\n<key>assets</key>\n<array>\n<dict>\n<key>kind</key>\n<string>software-package</string>\n<key>url</key>\n<string>%s</string>\n</dict>\n</array>\n<key>metadata</key>\n<dict>\n<key>bundle-identifier</key>\n<string>%s</string>\n<key>bundle-version</key>\n<string>1.0</string>\n<key>kind</key>\n<string>software</string>\n<key>title</key>\n<string>Signed App</string>\n</dict>\n</dict>\n</array>\n</dict>\n</plist>' "$IPA_DL_URL" "$BUNDLE_ID" > manifest.plist
+          
           gh release create ota output.ipa manifest.plist --title "OTA Release" --notes "Signed IPA & Manifest"
