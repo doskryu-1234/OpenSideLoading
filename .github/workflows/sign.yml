@@ -1,0 +1,45 @@
+name: iOS IPA Signer
+
+on:
+  repository_dispatch:
+    types: [trigger-sign]
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsign wget
+
+      - name: Download IPA File
+        run: |
+          echo "IPA 파일 다운로드 시작..."
+          wget -O input.ipa "${{ github.event.client_payload.ipa_url }}"
+
+      - name: Decode Certificates
+        run: |
+          echo "${{ github.event.client_payload.p12_base64 }}" | base64 -d > cert.p12
+          echo "${{ github.event.client_payload.prov_base64 }}" | base64 -d > cert.mobileprovision
+
+      - name: Execute Sign with zsign
+        run: |
+          P12_PASS="${{ github.event.client_payload.p12_password }}"
+          echo "앱 서명 진행 중..."
+          if [ -z "$P12_PASS" ]; then
+            zsign -k cert.p12 -m cert.mobileprovision -o output.ipa input.ipa
+          else
+            zsign -k cert.p12 -p "$P12_PASS" -m cert.mobileprovision -o output.ipa input.ipa
+          fi
+
+      - name: Upload Signed IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Signed-IPA
+          path: output.ipa
+          retention-days: 1
