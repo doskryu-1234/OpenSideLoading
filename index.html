@@ -45,15 +45,15 @@
             <form id="signForm">
                 <div class="input-group">
                     <label>IPA 파일</label>
-                    <input type="file" id="ipaFile" accept="*/*" required>
+                    <input type="file" id="ipaFile" accept=".ipa" required>
                 </div>
                 <div class="input-group">
                     <label>P12 인증서</label>
-                    <input type="file" id="p12File" accept="*/*" required>
+                    <input type="file" id="p12File" accept=".p12" required>
                 </div>
                 <div class="input-group">
                     <label>Mobileprovision 프로파일</label>
-                    <input type="file" id="provFile" accept="*/*" required>
+                    <input type="file" id="provFile" accept=".mobileprovision" required>
                 </div>
                 <div class="input-group">
                     <label>P12 암호</label>
@@ -78,25 +78,26 @@
             reader.onerror = error => reject(error);
         });
 
+        // catbox.moe를 통한 직접 다운로드 링크 생성
         const uploadIpaToTempStorage = async (file) => {
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('reqtype', 'fileupload');
+            formData.append('fileToUpload', file);
 
-            const res = await fetch('https://tmpfiles.org/api/v1/upload', {
+            const res = await fetch('https://catbox.moe/user/api.php', {
                 method: 'POST',
                 body: formData
             });
 
             if (!res.ok) throw new Error("IPA 파일 업로드 실패");
 
-            const data = await res.json();
-            const rawUrl = data.data.url;
-            return rawUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+            const directUrl = await res.text();
+            return directUrl.trim();
         };
 
         const waitForWorkflow = async () => {
-            for (let i = 0; i < 30; i++) {
-                await new Promise(r => setTimeout(r, 4000));
+            for (let i = 0; i < 40; i++) {
+                await new Promise(r => setTimeout(r, 5000));
                 const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/runs?event=repository_dispatch&per_page=1`, {
                     headers: { 'Authorization': `token ${GITHUB_PAT}` }
                 });
@@ -118,7 +119,7 @@
             const submitBtn = document.getElementById('submitBtn');
             
             submitBtn.disabled = true;
-            resultDiv.innerText = "파일 업로드 중...";
+            resultDiv.innerText = "IPA 파일 서버 업로드 중...";
 
             try {
                 const ipaFile = document.getElementById('ipaFile').files[0];
@@ -127,12 +128,12 @@
                 const p12Password = document.getElementById('p12Password').value;
 
                 const ipaUrl = await uploadIpaToTempStorage(ipaFile);
-                resultDiv.innerText = "인증서 변환 중...";
+                resultDiv.innerText = "인증서 데이터 인코딩 중...";
 
                 const p12Base64 = await fileToBase64(p12File);
                 const provBase64 = await fileToBase64(provFile);
 
-                resultDiv.innerText = "서명 작업 진행 중... (약 1분 소요)";
+                resultDiv.innerText = "서명 작업 요청 중... (약 1~2분 소요)";
 
                 const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/dispatches`, {
                     method: 'POST',
