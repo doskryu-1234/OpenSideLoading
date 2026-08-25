@@ -1,147 +1,73 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenSideLoading</title>
-    <link rel="manifest" href="manifest.json">
-    <style>
-        :root {
-            --bg-color: #0b0b0e;
-            --card-bg: #16161a;
-            --accent-color: #2563eb;
-            --text-color: #ffffff;
-            --sub-text: #a1a1aa;
-        }
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .container { width: 100%; max-width: 400px; }
-        .card { background-color: var(--card-bg); border-radius: 16px; padding: 20px; margin-bottom: 16px; }
-        h2 { font-size: 1.2rem; margin-top: 0; }
-        .input-group { margin-bottom: 12px; }
-        label { display: block; font-size: 0.85rem; color: var(--sub-text); margin-bottom: 4px; }
-        input[type="file"], input[type="password"] {
-            width: 100%; padding: 10px; background: #22222a; border: 1px solid #333; border-radius: 8px; color: #fff; box-sizing: border-box;
-        }
-        button {
-            width: 100%; padding: 14px; background-color: var(--accent-color); border: none; border-radius: 12px; color: white; font-weight: bold; font-size: 1rem; cursor: pointer; margin-top: 10px;
-        }
-        #result { margin-top: 15px; text-align: center; word-break: break-all; font-size: 0.9rem; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1 style="text-align: center; font-size: 1.5rem;">OpenSideLoading</h1>
-        <div class="card">
-            <h2>IPA Signer</h2>
-            <form id="signForm">
-                <div class="input-group">
-                    <label>IPA 파일</label>
-                    <input type="file" id="ipaFile" accept="*/*" required>
-                </div>
-                <div class="input-group">
-                    <label>P12 인증서</label>
-                    <input type="file" id="p12File" accept="*/*" required>
-                </div>
-                <div class="input-group">
-                    <label>Mobileprovision 프로파일</label>
-                    <input type="file" id="provFile" accept="*/*" required>
-                </div>
-                <div class="input-group">
-                    <label>P12 암호</label>
-                    <input type="password" id="p12Password" placeholder="비밀번호가 없으면 비워두세요">
-                </div>
-                <button type="submit" id="submitBtn">앱 서명 시작</button>
-            </form>
-            <div id="result"></div>
-        </div>
-    </div>
+name: iOS IPA Signer & OTA
 
-    <script>
-        const GITHUB_PAT = "새로_발급받은_토큰_입력";
-        const REPO_OWNER = "doskryu-1234";
-        const REPO_NAME = "OpenSideLoading";
+on:
+  repository_dispatch:
+    types: [trigger-sign]
 
-        const fileToBase64 = file => new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.onerror = error => reject(error);
-        });
+permissions:
+  contents: write
 
-        const uploadIpaToTempStorage = async (file) => {
-            const formData = new FormData();
-            formData.append('reqtype', 'fileupload');
-            formData.append('fileToUpload', file);
+jobs:
+  sign:
+    runs-on: ubuntu-latest
 
-            const res = await fetch('https://catbox.moe/user/api.php', {
-                method: 'POST',
-                body: formData
-            });
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-            if (!res.ok) throw new Error("IPA 임시 업로드 실패");
-            return await res.text();
-        };
+      - name: Checkout zsign Source
+        uses: actions/checkout@v4
+        with:
+          repository: zhlynn/zsign
+          path: zsign_src
 
-        document.getElementById('signForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const resultDiv = document.getElementById('result');
-            const submitBtn = document.getElementById('submitBtn');
-            
-            submitBtn.disabled = true;
-            resultDiv.innerText = "IPA 파일 전송 준비 중... (용량에 따라 수십 초 소요)";
+      - name: Build and Install zsign
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git g++ pkg-config libssl-dev
+          cd zsign_src/build/linux
+          make clean && make
+          sudo mv ${{ github.workspace }}/zsign_src/bin/zsign /usr/local/bin/
 
-            try {
-                const ipaFile = document.getElementById('ipaFile').files[0];
-                const p12File = document.getElementById('p12File').files[0];
-                const provFile = document.getElementById('provFile').files[0];
-                const p12Password = document.getElementById('p12Password').value;
+      - name: Download and Verify IPA
+        run: |
+          IPA_URL="${{ github.event.client_payload.ipa_url }}"
+          echo "Downloading IPA from: $IPA_URL"
+          curl -L -o input.ipa "$IPA_URL"
+          
+          # 다운로드된 파일의 앞부분 확인 (디버깅용 출력)
+          echo "=== 파일 헤더 내용 출력 ==="
+          head -c 100 input.ipa
+          echo "========================"
 
-                const ipaUrl = await uploadIpaToTempStorage(ipaFile);
-                resultDiv.innerText = "인증서 파일 변환 중...";
+          # 파일이 HTML(오류 페이지나 잘못된 링크)인지 검증
+          if grep -q "<html" input.ipa || grep -q "<DOCTYPE" input.ipa; then
+            echo "❌ 오류: 다운로드된 파일이 IPA가 아니라 HTML 웹페이지입니다."
+            echo "입력하신 링크($IPA_URL)가 잘못되었거나 파일 직접 다운로드 링크가 아닙니다."
+            exit 255
+          fi
 
-                const p12Base64 = await fileToBase64(p12File);
-                const provBase64 = await fileToBase64(provFile);
+          echo "✅ IPA 파일 다운로드 및 검증 완료!"
 
-                resultDiv.innerText = "GitHub Actions로 서명 요청 전송 중...";
+      - name: Decode Certs
+        run: |
+          echo "${{ github.event.client_payload.p12_base64 }}" | base64 -d > cert.p12
+          echo "${{ github.event.client_payload.prov_base64 }}" | base64 -d > cert.mobileprovision
 
-                const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/dispatches`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `token ${GITHUB_PAT}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        event_type: 'trigger-sign',
-                        client_payload: {
-                            ipa_url: ipaUrl,
-                            p12_base64: p12Base64,
-                            prov_base64: provBase64,
-                            p12_password: p12Password
-                        }
-                    })
-                });
+      - name: Execute Sign
+        run: |
+          P12_PASS="${{ github.event.client_payload.p12_password }}"
+          if [ -z "$P12_PASS" ]; then
+            zsign -k cert.p12 -m cert.mobileprovision -o output.ipa input.ipa
+          else
+            zsign -k cert.p12 -p "$P12_PASS" -m cert.mobileprovision -o output.ipa input.ipa
+          fi
 
-                if (res.ok) {
-                    resultDiv.innerText = "요청 성공! 백엔드에서 서명 중입니다. 약 1~2분 후 GitHub Actions 탭을 확인하십시오.";
-                } else {
-                    resultDiv.innerText = "요청 실패. 토큰 유효성을 확인하십시오.";
-                }
-            } catch (err) {
-                resultDiv.innerText = "오류 발생: " + err.message;
-            } finally {
-                submitBtn.disabled = false;
-            }
-        });
-    </script>
-</body>
-</html>
+      - name: Create Release and Upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete ota --cleanup-tag -y 2>/dev/null || true
+          IPA_DL_URL="https://github.com/${{ github.repository }}/releases/download/ota/output.ipa"
+          printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n<key>items</key>\n<array>\n<dict>\n<key>assets</key>\n<array>\n<dict>\n<key>kind</key>\n<string>software-package</string>\n<key>url</key>\n<string>%s</string>\n</dict>\n</array>\n<key>metadata</key>\n<dict>\n<key>bundle-identifier</key>\n<string>com.opensideloading.app</string>\n<key>bundle-version</key>\n<string>1.0</string>\n<key>kind</key>\n<string>software</string>\n<key>title</key>\n<string>Signed App</string>\n</dict>\n</dict>\n</array>\n</dict>\n</plist>' "$IPA_DL_URL" > manifest.plist
+          gh release create ota output.ipa manifest.plist --title "OTA Release" --notes "Signed IPA & Manifest"
