@@ -18,7 +18,7 @@ jobs:
       - name: Install zsign
         run: |
           sudo apt-get update
-          sudo apt-get install -y zsign wget curl
+          sudo apt-get install -y zsign wget
 
       - name: Download IPA
         run: |
@@ -38,17 +38,14 @@ jobs:
             zsign -k cert.p12 -p "$P12_PASS" -m cert.mobileprovision -o output.ipa input.ipa
           fi
 
-      - name: Create Release & Upload Files
+      - name: Create Release and Upload
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 기존 ota 태그가 있다면 삭제
           gh release delete ota --cleanup-tag -y || true
 
-          # IPA 파일 다운로드 직링크 주소 구성
           IPA_DL_URL="https://github.com/${{ github.repository }}/releases/download/ota/output.ipa"
 
-          # manifest.plist 작성
           cat <<EOF > manifest.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -82,5 +79,4 @@ jobs:
           </dict>
           EOF
 
-          # GitHub Release 생성 및 파일 2개(IPA, plist) 업로드
           gh release create ota output.ipa manifest.plist --title "OTA Release" --notes "Signed IPA & Manifest"
