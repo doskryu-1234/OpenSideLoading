@@ -78,23 +78,6 @@
             reader.onerror = error => reject(error);
         });
 
-        // catbox.moe를 통한 직접 다운로드 링크 생성
-        const uploadIpaToTempStorage = async (file) => {
-            const formData = new FormData();
-            formData.append('reqtype', 'fileupload');
-            formData.append('fileToUpload', file);
-
-            const res = await fetch('https://catbox.moe/user/api.php', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!res.ok) throw new Error("IPA 파일 업로드 실패");
-
-            const directUrl = await res.text();
-            return directUrl.trim();
-        };
-
         const waitForWorkflow = async () => {
             for (let i = 0; i < 40; i++) {
                 await new Promise(r => setTimeout(r, 5000));
@@ -119,7 +102,7 @@
             const submitBtn = document.getElementById('submitBtn');
             
             submitBtn.disabled = true;
-            resultDiv.innerText = "IPA 파일 서버 업로드 중...";
+            resultDiv.innerText = "파일 변환 중...";
 
             try {
                 const ipaFile = document.getElementById('ipaFile').files[0];
@@ -127,13 +110,11 @@
                 const provFile = document.getElementById('provFile').files[0];
                 const p12Password = document.getElementById('p12Password').value;
 
-                const ipaUrl = await uploadIpaToTempStorage(ipaFile);
-                resultDiv.innerText = "인증서 데이터 인코딩 중...";
-
+                const ipaBase64 = await fileToBase64(ipaFile);
                 const p12Base64 = await fileToBase64(p12File);
                 const provBase64 = await fileToBase64(provFile);
 
-                resultDiv.innerText = "서명 작업 요청 중... (약 1~2분 소요)";
+                resultDiv.innerText = "서명 작업 진행 중... (약 1분 소요)";
 
                 const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/dispatches`, {
                     method: 'POST',
@@ -145,7 +126,7 @@
                     body: JSON.stringify({
                         event_type: 'trigger-sign',
                         client_payload: {
-                            ipa_url: ipaUrl,
+                            ipa_base64: ipaBase64,
                             p12_base64: p12Base64,
                             prov_base64: provBase64,
                             p12_password: p12Password
