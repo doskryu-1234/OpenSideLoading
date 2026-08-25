@@ -66,7 +66,7 @@
     </div>
 
     <script>
-        const GITHUB_PAT = "새로_발급받은_토큰_입력";
+        const GITHUB_PAT = "Ghp_Fu5rEGjrLC0UFfAWga6zj9OK45oMRT2oR1B3";
         const REPO_OWNER = "doskryu-1234";
         const REPO_NAME = "OpenSideLoading";
 
@@ -79,16 +79,18 @@
 
         const uploadIpaToTempStorage = async (file) => {
             const formData = new FormData();
-            formData.append('reqtype', 'fileupload');
-            formData.append('fileToUpload', file);
+            formData.append('file', file);
 
-            const res = await fetch('https://catbox.moe/user/api.php', {
+            const res = await fetch('https://tmpfiles.org/api/v1/upload', {
                 method: 'POST',
                 body: formData
             });
 
             if (!res.ok) throw new Error("IPA 임시 업로드 실패");
-            return await res.text();
+
+            const data = await res.json();
+            const rawUrl = data.data.url;
+            return rawUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
         };
 
         document.getElementById('signForm').addEventListener('submit', async (e) => {
@@ -97,7 +99,7 @@
             const submitBtn = document.getElementById('submitBtn');
             
             submitBtn.disabled = true;
-            resultDiv.innerText = "IPA 파일 전송 준비 중... (용량에 따라 수십 초 소요)";
+            resultDiv.innerText = "IPA 파일 전송 중... (용량에 따라 수십 초 소요)";
 
             try {
                 const ipaFile = document.getElementById('ipaFile').files[0];
