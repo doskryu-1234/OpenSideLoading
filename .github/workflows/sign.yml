@@ -24,12 +24,9 @@ jobs:
       - name: Build and Install zsign
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ libssl-dev
-          cd zsign_src
-          mkdir -p build
-          cd build
-          cmake ..
-          make
+          sudo apt-get install -y git g++ pkg-config libssl-dev
+          cd zsign_src/build/linux
+          make clean && make
           sudo mv zsign /usr/local/bin/
 
       - name: Download IPA
