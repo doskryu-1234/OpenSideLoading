@@ -66,10 +66,10 @@
     </div>
 
     <script>
-        const GITHUB_PAT = "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";
+        // GitHub Pages 환경에 맞춘 manifest.plist 주소 설정
         const REPO_OWNER = "doskryu-1234";
         const REPO_NAME = "OpenSideLoading";
-        const PLIST_URL = `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/ota/manifest.plist`;
+        const PLIST_URL = `https://${REPO_OWNER}.github.io/${REPO_NAME}/manifest.plist`;
 
         const fileToBase64 = file => new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -77,24 +77,6 @@
             reader.onload = () => resolve(reader.result.split(',')[1]);
             reader.onerror = error => reject(error);
         });
-
-        const waitForWorkflow = async () => {
-            for (let i = 0; i < 40; i++) {
-                await new Promise(r => setTimeout(r, 5000));
-                const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/runs?event=repository_dispatch&per_page=1`, {
-                    headers: { 'Authorization': `token ${GITHUB_PAT}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    const latestRun = data.workflow_runs[0];
-                    if (latestRun && latestRun.status === 'completed') {
-                        if (latestRun.conclusion === 'success') return true;
-                        throw new Error("서명 실패. Actions 로그를 확인하십시오.");
-                    }
-                }
-            }
-            throw new Error("작업 시간이 초과되었습니다.");
-        };
 
         document.getElementById('signForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -115,27 +97,25 @@
 
                 resultDiv.innerText = "서명 작업 요청 중... (약 1~2분 소요)";
 
-                const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/dispatches`, {
+                // 브라우저가 직접 깃허브에 쏘지 않고, Vercel 서버(/api/sign)를 안전하게 거쳐서 요청
+                const res = await fetch('/api/sign', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `token ${GITHUB_PAT}`,
-                        'Accept': 'application/vnd.github.v3+json',
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        event_type: 'trigger-sign',
-                        client_payload: {
-                            ipa_url: ipaUrl,
-                            p12_base64: p12Base64,
-                            prov_base64: provBase64,
-                            p12_password: p12Password
-                        }
+                        ipa_url: ipaUrl,
+                        p12_base64: p12Base64,
+                        prov_base64: provBase64,
+                        p12_password: p12Password
                     })
                 });
 
                 if (!res.ok) throw new Error("서명 요청 실패");
 
-                await waitForWorkflow();
+                // 깃허브 액션이 완료될 시간을 고려해 여유 있게 대기 (약 35초)
+                resultDiv.innerText = "서명 진행 중... 잠시만 기다려주세요.";
+                await new Promise(r => setTimeout(r, 35000));
                 
                 resultDiv.innerText = "서명 완료! 설치 팝업을 호출합니다...";
                 
