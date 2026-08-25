@@ -15,19 +15,9 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Checkout zsign Source
-        uses: actions/checkout@v4
-        with:
-          repository: zhlynn/zsign
-          path: zsign_src
-
-      - name: Build and Install zsign
+      - name: Install zsign via Snap
         run: |
-          sudo apt-get update
-          sudo apt-get install -y g++ libssl-dev
-          cd zsign_src
-          g++ -I. -Isrc src/*.cpp -lcrypto -O3 -o zsign
-          sudo mv zsign /usr/local/bin/
+          sudo snap install zsign --edge || sudo snap install zsign
 
       - name: Download IPA
         run: |
