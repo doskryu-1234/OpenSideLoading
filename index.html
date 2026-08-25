@@ -28,13 +28,13 @@
         h2 { font-size: 1.2rem; margin-top: 0; }
         .input-group { margin-bottom: 12px; }
         label { display: block; font-size: 0.85rem; color: var(--sub-text); margin-bottom: 4px; }
-        input[type="file"], input[type="password"], input[type="url"] {
+        input[type="file"], input[type="password"] {
             width: 100%; padding: 10px; background: #22222a; border: 1px solid #333; border-radius: 8px; color: #fff; box-sizing: border-box;
         }
         button {
             width: 100%; padding: 14px; background-color: var(--accent-color); border: none; border-radius: 12px; color: white; font-weight: bold; font-size: 1rem; cursor: pointer; margin-top: 10px;
         }
-        #result { margin-top: 15px; text-align: center; word-break: break-all; }
+        #result { margin-top: 15px; text-align: center; word-break: break-all; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -44,8 +44,8 @@
             <h2>IPA Signer</h2>
             <form id="signForm">
                 <div class="input-group">
-                    <label>IPA 파일 다운로드 URL</label>
-                    <input type="url" id="ipaUrl" placeholder="https://example.com/app.ipa" required>
+                    <label>IPA 파일</label>
+                    <input type="file" id="ipaFile" accept="*/*" required>
                 </div>
                 <div class="input-group">
                     <label>P12 인증서</label>
@@ -59,7 +59,7 @@
                     <label>P12 암호</label>
                     <input type="password" id="p12Password" placeholder="비밀번호가 없으면 비워두세요">
                 </div>
-                <button type="submit">앱 서명 시작</button>
+                <button type="submit" id="submitBtn">앱 서명 시작</button>
             </form>
             <div id="result"></div>
         </div>
@@ -77,16 +77,36 @@
             reader.onerror = error => reject(error);
         });
 
+        const uploadIpaToTempStorage = async (file) => {
+            const formData = new FormData();
+            formData.append('reqtype', 'fileupload');
+            formData.append('fileToUpload', file);
+
+            const res = await fetch('https://catbox.moe/user/api.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) throw new Error("IPA 임시 업로드 실패");
+            return await res.text();
+        };
+
         document.getElementById('signForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const resultDiv = document.getElementById('result');
-            resultDiv.innerText = "인증서 처리 중...";
+            const submitBtn = document.getElementById('submitBtn');
+            
+            submitBtn.disabled = true;
+            resultDiv.innerText = "IPA 파일 전송 준비 중... (용량에 따라 수십 초 소요)";
 
             try {
-                const ipaUrl = document.getElementById('ipaUrl').value;
+                const ipaFile = document.getElementById('ipaFile').files[0];
                 const p12File = document.getElementById('p12File').files[0];
                 const provFile = document.getElementById('provFile').files[0];
                 const p12Password = document.getElementById('p12Password').value;
+
+                const ipaUrl = await uploadIpaToTempStorage(ipaFile);
+                resultDiv.innerText = "인증서 파일 변환 중...";
 
                 const p12Base64 = await fileToBase64(p12File);
                 const provBase64 = await fileToBase64(provFile);
@@ -112,12 +132,14 @@
                 });
 
                 if (res.ok) {
-                    resultDiv.innerText = "요청 성공! 백엔드에서 서명 작업 중입니다. 잠시 후 GitHub 저장소의 Actions 탭에서 결과를 확인하세요.";
+                    resultDiv.innerText = "요청 성공! 백엔드에서 서명 중입니다. 약 1~2분 후 GitHub Actions 탭을 확인하십시오.";
                 } else {
-                    resultDiv.innerText = "요청 실패. 토큰 유효성이나 저장소 설정을 확인하십시오.";
+                    resultDiv.innerText = "요청 실패. 토큰 유효성을 확인하십시오.";
                 }
             } catch (err) {
                 resultDiv.innerText = "오류 발생: " + err.message;
+            } finally {
+                submitBtn.disabled = false;
             }
         });
     </script>
