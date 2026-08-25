@@ -15,13 +15,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Build and Install zsign
+      - name: Install zsign
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++ libssl-dev zip wget git
-          git clone https://github.com/zhlynn/zsign.git
-          cd zsign
-          g++ src/*.cpp -lcrypto -O3 -o zsign 2>/dev/null || g++ *.cpp -lcrypto -O3 -o zsign
+          sudo apt-get install -y wget zip libssl-dev
+          wget https://github.com/zhlynn/zsign/releases/download/v0.1/zsign-linux-x86_64.zip -O zsign.zip
+          unzip zsign.zip
+          chmod +x zsign
           sudo mv zsign /usr/local/bin/
 
       - name: Download IPA
