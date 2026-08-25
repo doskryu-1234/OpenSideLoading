@@ -4,6 +4,10 @@ on:
   repository_dispatch:
     types: [trigger-sign]
 
+permissions:
+  contents: read
+  statuses: write
+
 jobs:
   sign:
     runs-on: ubuntu-latest
@@ -37,12 +41,10 @@ jobs:
 
       - name: Upload Signed IPA & Create OTA Plist
         run: |
-          # 서명된 IPA를 tmpfiles.org에 업로드하여 직링크 추출
-          UPLOAD_RES=$(curl -F "file=@output.ipa" https://tmpfiles.org/api/v1/upload)
-          RAW_URL=$(echo $UPLOAD_RES | jq -r '.data.url')
-          IPA_DL_URL=$(echo $RAW_URL | sed 's/tmpfiles.org\//tmpfiles.org\/dl\//')
+          # 서명된 IPA 파일 업로드
+          IPA_DL_URL=$(curl -s -F "file=@output.ipa" https://bashupload.com | grep -o 'https://bashupload.com/[^"]*' | head -n 1)
 
-          # plist 파일 생성
+          # plist 파일 작성
           cat <<EOF > manifest.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -77,11 +79,9 @@ jobs:
           EOF
 
           # plist 파일 업로드
-          PLIST_RES=$(curl -F "file=@manifest.plist" https://tmpfiles.org/api/v1/upload)
-          PLIST_RAW_URL=$(echo $PLIST_RES | jq -r '.data.url')
-          PLIST_DL_URL=$(echo $PLIST_RAW_URL | sed 's/tmpfiles.org\//tmpfiles.org\/dl\//')
+          PLIST_DL_URL=$(curl -s -F "file=@manifest.plist" https://bashupload.com | grep -o 'https://bashupload.com/[^"]*' | head -n 1)
 
-          # GitHub Commit Status로 결과 plist URL 전달
+          # Status 등록
           curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
