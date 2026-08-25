@@ -26,7 +26,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++ libssl-dev
           cd zsign_src
-          g++ src/*.cpp -lcrypto -O3 -o zsign
+          g++ -I. -Isrc src/*.cpp -lcrypto -O3 -o zsign
           sudo mv zsign /usr/local/bin/
 
       - name: Download IPA
