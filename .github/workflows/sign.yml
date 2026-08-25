@@ -1,4 +1,4 @@
-name: iOS IPA Signer
+name: iOS IPA Signer & OTA
 
 on:
   repository_dispatch:
@@ -15,11 +15,10 @@ jobs:
       - name: Install Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y zsign wget
+          sudo apt-get install -y zsign wget curl jq
 
-      - name: Download IPA File
+      - name: Download IPA
         run: |
-          echo "IPA 파일 다운로드 시작..."
           wget -O input.ipa "${{ github.event.client_payload.ipa_url }}"
 
       - name: Decode Certificates
@@ -30,16 +29,61 @@ jobs:
       - name: Execute Sign with zsign
         run: |
           P12_PASS="${{ github.event.client_payload.p12_password }}"
-          echo "앱 서명 진행 중..."
           if [ -z "$P12_PASS" ]; then
             zsign -k cert.p12 -m cert.mobileprovision -o output.ipa input.ipa
           else
             zsign -k cert.p12 -p "$P12_PASS" -m cert.mobileprovision -o output.ipa input.ipa
           fi
 
-      - name: Upload Signed IPA Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Signed-IPA
-          path: output.ipa
-          retention-days: 1
+      - name: Upload Signed IPA & Create OTA Plist
+        run: |
+          # 서명된 IPA를 tmpfiles.org에 업로드하여 직링크 추출
+          UPLOAD_RES=$(curl -F "file=@output.ipa" https://tmpfiles.org/api/v1/upload)
+          RAW_URL=$(echo $UPLOAD_RES | jq -r '.data.url')
+          IPA_DL_URL=$(echo $RAW_URL | sed 's/tmpfiles.org\//tmpfiles.org\/dl\//')
+
+          # plist 파일 생성
+          cat <<EOF > manifest.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>items</key>
+              <array>
+                  <dict>
+                      <key>assets</key>
+                      <array>
+                          <dict>
+                              <key>kind</key>
+                              <string>software-package</string>
+                              <key>url</key>
+                              <string>${IPA_DL_URL}</string>
+                          </dict>
+                      </array>
+                      <key>metadata</key>
+                      <dict>
+                          <key>bundle-identifier</key>
+                          <string>com.opensideloading.app</string>
+                          <key>bundle-version</key>
+                          <string>1.0</string>
+                          <key>kind</key>
+                          <string>software</string>
+                          <key>title</key>
+                          <string>Signed App</string>
+                      </dict>
+                  </dict>
+              </array>
+          </dict>
+          EOF
+
+          # plist 파일 업로드
+          PLIST_RES=$(curl -F "file=@manifest.plist" https://tmpfiles.org/api/v1/upload)
+          PLIST_RAW_URL=$(echo $PLIST_RES | jq -r '.data.url')
+          PLIST_DL_URL=$(echo $PLIST_RAW_URL | sed 's/tmpfiles.org\//tmpfiles.org\/dl\//')
+
+          # GitHub Commit Status로 결과 plist URL 전달
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -d "{\"state\": \"success\", \"target_url\": \"${PLIST_DL_URL}\", \"description\": \"OTA_READY\", \"context\": \"ota-dispatch\"}"
